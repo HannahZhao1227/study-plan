@@ -17,6 +17,28 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .header h1{font-size:1.25rem;margin-bottom:8px}
 .header .meta{color:var(--muted);font-size:.85rem}
 
+/* Calendar */
+.calendar-section{background:var(--card);border-radius:12px;padding:20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.countdown-row{display:flex;gap:12px;margin-bottom:12px}
+.countdown-item{flex:1;text-align:center;padding:12px 8px;border-radius:10px;background:var(--bg)}
+.countdown-item .label{font-size:.75rem;color:var(--muted);margin-bottom:2px}
+.countdown-item .num{font-size:1.8rem;font-weight:800;color:var(--accent)}
+.countdown-item .unit{font-size:.75rem;color:var(--muted)}
+.countdown-item.exam{background:#fef2f2}
+.countdown-item.exam .num{color:var(--red)}
+.countdown-item.phase{background:var(--accent-light)}
+.motto{text-align:center;font-size:.82rem;font-weight:600;color:var(--warn);margin-bottom:14px;line-height:1.5}
+.calendars-grid{display:flex;justify-content:center;gap:8px}
+.month-card{background:var(--bg);border-radius:10px;padding:8px 12px;text-align:center;max-width:260px}
+.month-card .mname{font-size:.75rem;font-weight:700;margin-bottom:4px;color:var(--text)}
+.month-card .weekdays{display:grid;grid-template-columns:repeat(7,1fr);font-size:.55rem;color:var(--muted);margin-bottom:2px}
+.month-card .days{display:grid;grid-template-columns:repeat(7,1fr);gap:1px}
+.month-card .days span{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:.62rem;border-radius:50%;width:22px;height:22px;margin:0 auto}
+.month-card .days span.empty{background:transparent}
+.month-card .days span.today{background:var(--accent);color:#fff;font-weight:700;box-shadow:0 0 0 2px var(--accent-light)}
+.month-card .days span.exam-day{background:var(--red);color:#fff;font-weight:700}
+.month-card .days span.past{color:var(--border)}
+
 /* Sync status */
 .sync-status{display:inline-flex;align-items:center;gap:4px;font-size:.75rem;padding:3px 10px;border-radius:10px;font-weight:600}
 .sync-status.synced{background:var(--success-light);color:var(--success)}
@@ -93,6 +115,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 <div class="header">
   <h1>通信原理 · 阶段一 打卡</h1>
   <div class="meta">7月1日 — 7月14日 · Ch3~Ch10 + 知识点⑩ · 每天保底≈2h</div>
+</div>
+
+<div class="calendar-section">
+  <div class="countdown-row">
+    <div class="countdown-item phase" id="phaseCountdown"><div class="label">阶段一剩余</div><div class="num">-</div><div class="unit">天 · 7.14 截止</div></div>
+    <div class="countdown-item exam" id="examCountdown"><div class="label">距国网考试</div><div class="num">-</div><div class="unit">天 · 12.05 考试</div></div>
+  </div>
+  <div class="motto" id="mottoText"></div>
+  <div id="calendars" class="calendars-grid"></div>
 </div>
 
 <div class="progress-section">
@@ -271,28 +302,137 @@ function debouncedSync(){
 
 // ===== INIT =====
 async function initState(){
-  const remoteState = await loadFromSupabase();
-  if(remoteState){
-    state = remoteState;
-    saveLocalState();
+  // 1. 先从本地秒加载，立即渲染
+  const local = loadLocalState();
+  if(local){ state = local; setSyncStatus('synced'); }
+  else { state = defaultState(); setSyncStatus('synced'); }
+  document.getElementById('daysContainer').style.display = 'block';
+  renderCalendars();
+  rebuildAll();
+
+  // 2. 后台静默同步 Supabase，不阻塞页面
+  if(SUPABASE_CONFIGURED){
+    const remote = await loadFromSupabase();
+    if(remote && JSON.stringify(remote) !== JSON.stringify(state)){
+      state = remote;
+      saveLocalState();
+      renderCalendars();
+      rebuildAll();
+    }
     setSyncStatus('synced');
-  } else {
-    const local = loadLocalState();
-    if(local){
-      state = local;
-      setSyncStatus('offline');
-      if(SUPABASE_CONFIGURED) debouncedSync();
-    } else {
-      state = defaultState();
-      setSyncStatus('synced');
+  }
+}
+
+// ===== CALENDAR =====
+const EXAM_DATE = new Date(2026, 11, 5); // Dec 5, 2026
+const PHASES = [
+  { name:'阶段一·通信原理',      start:'2026-07-01', end:'2026-07-14' },
+  { name:'阶段二·光纤通信',      start:'2026-07-15', end:'2026-07-24' },
+  { name:'阶段三·数据通信网',    start:'2026-07-25', end:'2026-08-05' },
+  { name:'阶段四·移动通信',      start:'2026-08-06', end:'2026-08-14' },
+  { name:'阶段五·公共+扫尾',     start:'2026-08-15', end:'2026-08-31' },
+  { name:'二轮刷题冲刺',         start:'2026-09-01', end:'2026-12-04' }
+];
+const MOTTOS = [
+  '拖延最大的代价不是时间，是焦虑。打开就别关，先学 5 分钟再说。',
+  '每天 2 小时保底，听起来不多——但 157 天后你会感谢今天的自己。',
+  '启动困难？不用想"学好"，只想"开始"。翻开书就算赢。',
+  '你都花了精力做打卡页面，好意思不打钩吗？',
+  '国网考试一年一次。12 月 5 号不会等你准备好才来。',
+  '今天少学一小时 = 明天多焦虑一小时。等式成立。',
+  '别想"有没有状态"，先动起来，状态是做事的过程中产生的。',
+  '5 分钟法则：跟自己说只学 5 分钟，5 分钟后你大概率会继续。'
+];
+
+function renderCalendars(){
+  const container = document.getElementById('calendars');
+  container.innerHTML = '';
+  const today = new Date();
+  const curMonth = today.getMonth(); // 0=Jan
+  const curYear = today.getFullYear();
+  const todayKey = `${curYear}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+  const examKey = '2026-12-05';
+  const weekDays = ['日','一','二','三','四','五','六'];
+
+  // 只显示当月 + 下月
+  const monthsToShow = [curMonth];
+  if(curMonth < 11) monthsToShow.push(curMonth + 1); // 12月考完不显示次年
+
+  for(const m of monthsToShow){
+    const firstDay = new Date(curYear, m, 1);
+    const daysInMonth = new Date(curYear, m+1, 0).getDate();
+    const startDow = firstDay.getDay();
+    const monthNames = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+
+    let daysHTML = '';
+    for(let i = 0; i < startDow; i++){ daysHTML += '<span class="empty"></span>'; }
+    for(let d = 1; d <= daysInMonth; d++){
+      const dk = `${curYear}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      let cls = '';
+      if(dk === todayKey) cls = 'today';
+      else if(dk === examKey) cls = 'exam-day';
+      else if(dk < todayKey) cls = 'past';
+      daysHTML += `<span class="${cls}">${d}</span>`;
+    }
+    container.innerHTML += `
+      <div class="month-card">
+        <div class="mname">${curYear}年 ${monthNames[m]}</div>
+        <div class="weekdays">${weekDays.map(w => `<span>${w}</span>`).join('')}</div>
+        <div class="days">${daysHTML}</div>
+      </div>`;
+  }
+
+  // Countdowns
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const examDiff = Math.ceil((EXAM_DATE - todayStart) / (1000*60*60*24));
+  document.getElementById('examCountdown').querySelector('.num').textContent = examDiff;
+
+  // Find current phase countdown
+  let phaseTarget = null;
+  for(const p of PHASES){
+    const pend = new Date(p.end);
+    if(todayStart <= pend){
+      phaseTarget = { name: p.name, days: Math.ceil((pend - todayStart) / (1000*60*60*24)) };
+      break;
     }
   }
-  document.getElementById('daysContainer').style.display = 'block';
-  rebuildAll();
+  if(phaseTarget){
+    document.getElementById('phaseCountdown').querySelector('.num').textContent = phaseTarget.days;
+    document.getElementById('phaseCountdown').querySelector('.unit').textContent = `天 · ${phaseTarget.name}`;
+    document.getElementById('phaseCountdown').querySelector('.label').textContent = '当前阶段剩余';
+  }
+  // Random motto
+  document.getElementById('mottoText').textContent = MOTTOS[Math.floor(Math.random() * MOTTOS.length)];
 }
 
 // ===== RENDER =====
 const container = document.getElementById('daysContainer');
+let showAllDays = false; // 默认聚焦模式
+
+function getTodayIndex(){
+  const now = new Date();
+  const m = now.getMonth()+1, d = now.getDate();
+  if(m === 7 && d >= 1 && d <= 14) return d - 1;
+  if(m > 7 || (m === 7 && d > 14)) return planData.length - 1; // 阶段一已过，显示最后一天
+  return -1; // 阶段一还没开始，但应该不会
+}
+
+function getPastIncomplete(){
+  const todayIdx = getTodayIndex();
+  const past = [];
+  for(let i = 0; i < todayIdx; i++){
+    const st = state[i];
+    if(planData[i].isRest) continue;
+    const missing = [];
+    st.minTasks.forEach((done, ti) => { if(!done) missing.push({type:'min', text:planData[i].min[ti]}); });
+    if(missing.length > 0) past.push({dayIdx:i, day:planData[i], missing:missing});
+  }
+  return past;
+}
+
+function isToday(di){
+  return di === getTodayIndex();
+}
 
 function renderDay(day, di){
   const st = state[di];
@@ -300,9 +440,15 @@ function renderDay(day, di){
   dayDiv.className = 'day' + (day.isRest ? ' rest' : '');
   const savedOpen = loadLocalOpen();
   const hasToggled = localStorage.getItem(TOGGLED_KEY);
-  // 首次打开：全部展开。手动折叠过：按记忆恢复。
-  if(!hasToggled || savedOpen.has(di)){
-    dayDiv.classList.add('open');
+  // 聚焦模式：今天和未完成的天强制展开；全部模式：按记忆恢复
+  if(!showAllDays){
+    if(isToday(di) || getPastIncomplete().some(p => p.dayIdx === di)){
+      dayDiv.classList.add('open');
+    }
+  } else {
+    if(!hasToggled || savedOpen.has(di)){
+      dayDiv.classList.add('open');
+    }
   }
 
   const checkinHTML = day.isRest
@@ -355,8 +501,49 @@ function renderDay(day, di){
 
 function rebuildAll(){
   container.innerHTML = '';
-  planData.forEach((day, di) => renderDay(day, di));
+  if(showAllDays){
+    // 展开全部模式
+    container.innerHTML = '<div style="text-align:right;margin-bottom:8px"><button class="btn btn-reset" id="btnFocusMode">📌 只看今日</button></div>';
+    planData.forEach((day, di) => renderDay(day, di));
+  } else {
+    // 聚焦模式：今日 + 历史未完成
+    const past = getPastIncomplete();
+    const todayIdx = getTodayIndex();
+    const pastSet = new Set(past.map(p => p.dayIdx));
+
+    let headerHTML = '<div style="text-align:right;margin-bottom:8px"><button class="btn btn-reset" id="btnShowAll">📋 展开全部 14 天</button></div>';
+
+    // 历史未完成警告
+    if(past.length > 0){
+      headerHTML += '<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px;margin-bottom:12px;font-size:.82rem">';
+      headerHTML += '<strong style="color:var(--red)">⚠️ 你有 ' + past.length + ' 天的保底任务还没完成：</strong><br>';
+      past.forEach(p => {
+        headerHTML += '<span style="color:var(--muted)">' + p.day.date + ' ' + p.day.chapter + '</span>：';
+        headerHTML += p.missing.map(m => m.text).join('；') + '<br>';
+      });
+      headerHTML += '</div>';
+    }
+
+    headerHTML += '<div style="font-size:.85rem;font-weight:700;color:var(--accent);margin-bottom:8px">📌 今日任务</div>';
+    container.innerHTML = headerHTML;
+
+    // 渲染历史未完成的天 + 今天
+    past.forEach(p => renderDay(p.day, p.dayIdx));
+    if(todayIdx >= 0 && todayIdx < planData.length && !pastSet.has(todayIdx)){
+      renderDay(planData[todayIdx], todayIdx);
+    }
+
+    // 如果今天不在阶段一范围内
+    if(todayIdx < 0 || todayIdx >= planData.length){
+      container.innerHTML += '<div style="text-align:center;padding:20px;color:var(--muted);font-size:.85rem">阶段一（7.1-7.14）已结束或尚未开始</div>';
+    }
+  }
+
   updateProgress();
+
+  // 绑定切换按钮
+  document.getElementById('btnShowAll')?.addEventListener('click', () => { showAllDays = true; rebuildAll(); });
+  document.getElementById('btnFocusMode')?.addEventListener('click', () => { showAllDays = false; rebuildAll(); });
 }
 
 // ===== PROGRESS =====
