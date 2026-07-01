@@ -413,11 +413,13 @@ container.addEventListener('click', e => {
     state[di].checkedIn = !state[di].checkedIn;
     saveLocalState();
     debouncedSync();
+    saveLocalOpen(); // 记住当前哪些卡片展开，重建后恢复
     rebuildAll();
   } else if(action === 'reset'){
     state[di] = { minTasks: planData[di].min.map(() => false), extraTasks: planData[di].extra.map(() => false), checkedIn: false };
     saveLocalState();
     debouncedSync();
+    saveLocalOpen();
     rebuildAll();
   }
 });
