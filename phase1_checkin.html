@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>通信原理 · 阶段一打卡</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f5f5f5;--card:#fff;--text:#333;--muted:#888;--border:#e0e0e0;
+  --accent:#2563eb;--accent-light:#dbeafe;--success:#16a34a;--success-light:#dcfce7;
+  --warn:#ea580c;--warn-light:#fff7ed;--rest:#9333ea;--rest-light:#faf5ff;--red:#dc2626;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.6;padding:16px;max-width:720px;margin:0 auto}
+
+.header{background:var(--card);border-radius:12px;padding:20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.header h1{font-size:1.25rem;margin-bottom:8px}
+.header .meta{color:var(--muted);font-size:.85rem}
+
+/* Sync status */
+.sync-status{display:inline-flex;align-items:center;gap:4px;font-size:.75rem;padding:3px 10px;border-radius:10px;font-weight:600}
+.sync-status.synced{background:var(--success-light);color:var(--success)}
+.sync-status.syncing{background:var(--accent-light);color:var(--accent)}
+.sync-status.offline{background:var(--warn-light);color:var(--warn)}
+
+/* Progress */
+.progress-section{background:var(--card);border-radius:12px;padding:20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.progress-label{display:flex;justify-content:space-between;margin-bottom:8px;font-size:.9rem;font-weight:600}
+.progress-label .pct{color:var(--accent)}
+.progress-bar{height:10px;background:var(--border);border-radius:5px;overflow:hidden;margin-bottom:6px}
+.progress-fill{height:100%;background:var(--accent);border-radius:5px;transition:width .4s ease}
+.progress-detail{display:flex;flex-wrap:wrap;gap:8px;font-size:.78rem;color:var(--muted)}
+.progress-detail span{padding:2px 8px;border-radius:10px;background:var(--bg)}
+
+/* Day card */
+.day{margin-bottom:12px;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.day-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;cursor:pointer;user-select:none;background:var(--card);transition:background .2s}
+.day-header:hover{background:#fafafa}
+.day-header .left{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.day-date{font-weight:700;font-size:.95rem;white-space:nowrap}
+.day-weekday{font-size:.8rem;color:var(--muted)}
+.day-chapter{font-size:.8rem;color:var(--accent);font-weight:600}
+.day.rest .day-header{background:var(--rest-light)}
+.day.rest .day-chapter{color:var(--rest)}
+.day-header .right{display:flex;align-items:center;gap:8px}
+.day-arrow{font-size:.7rem;color:var(--muted);transition:transform .3s}
+.day.open .day-arrow{transform:rotate(90deg)}
+
+.checkin-badge{font-size:.75rem;padding:3px 10px;border-radius:12px;font-weight:600;white-space:nowrap}
+.checkin-badge.pending{background:var(--bg);color:var(--muted)}
+.checkin-badge.done{background:var(--success-light);color:var(--success)}
+
+.day-body{display:none;background:var(--card);border-top:1px solid var(--border);padding:0 16px 12px}
+.day.open .day-body{display:block}
+
+.task-group{margin-top:10px}
+.task-group-label{font-size:.78rem;font-weight:700;margin-bottom:4px;display:flex;align-items:center;gap:4px}
+.task-group-label .badge{font-size:.7rem;padding:1px 6px;border-radius:8px;color:#fff}
+.badge.min{background:var(--accent)}
+.badge.extra{background:var(--warn)}
+
+.task{display:flex;align-items:flex-start;gap:8px;padding:6px 0;font-size:.85rem;border-bottom:1px solid #f5f5f5}
+.task:last-child{border-bottom:none}
+.task input[type=checkbox]{margin-top:3px;width:16px;height:16px;accent-color:var(--accent);flex-shrink:0}
+.task label{flex:1;cursor:pointer}
+.task input:checked+label{color:var(--muted);text-decoration:line-through}
+
+.btn-row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.btn{padding:6px 14px;border-radius:8px;border:none;font-size:.8rem;font-weight:600;cursor:pointer;transition:opacity .2s}
+.btn:active{opacity:.7}
+.btn-checkin{background:var(--accent);color:#fff}
+.btn-reset{background:var(--bg);color:var(--muted);border:1px solid var(--border)}
+.btn-checkin.done{background:var(--success);color:#fff}
+
+.footer{text-align:center;padding:20px;color:var(--muted);font-size:.75rem}
+
+.chapter-note{font-size:.78rem;color:var(--warn);background:var(--warn-light);padding:6px 10px;border-radius:6px;margin-top:8px;display:none}
+.day.open .chapter-note{display:block}
+
+@media (max-width:480px){
+  body{padding:10px}
+  .header{padding:14px}
+  .day-header{padding:10px 12px}
+  .day-date{font-size:.85rem}
+  .day-chapter{font-size:.73rem}
+  .task{font-size:.8rem}
+  .btn{padding:5px 10px;font-size:.75rem}
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>通信原理 · 阶段一 打卡</h1>
+  <div class="meta">7月1日 — 7月14日 · Ch3~Ch10 + 知识点⑩ · 每天保底≈2h</div>
+</div>
+
+<div class="progress-section">
+  <div class="progress-label"><span>整体进度</span><span class="pct" id="overallPct">0%</span></div>
+  <div class="progress-bar"><div class="progress-fill" id="overallBar" style="width:0%"></div></div>
+  <div class="progress-detail" id="progressDetail"></div>
+</div>
+
+<div id="daysContainer"></div>
+
+<div class="footer">
+  <span id="syncIndicator" class="sync-status synced">☁️ 已同步</span>
+  &nbsp; 数据自动同步至云端 · 手机/电脑/平板共享进度
+</div>
+
+<script>
+// ===== SUPABASE CONFIG =====
+// TODO: replace with your real project URL and anon key
+const SUPABASE_URL = 'https://bdjoupucarzjxadkrbbr.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_9d4lYpbtLHcZ1YlJ8zisdw_rqGmML0r'; // ← 确认完整
+const SUPABASE_CONFIGURED = SUPABASE_URL.includes('YOUR-PROJECT') === false;
+
+// ===== DATA =====
+const planData = [
+  { date:"7.1", weekday:"周三", chapter:"Ch3 信道与噪声", isRest:false, note:"",
+    min:[  "§1 狭义/广义信道 + §2 常用传输媒质 + §3 信道数学模型 + §4 恒参信道特性" ],
+    extra:[ "§5 随参信道特性及其对信号传输的影响" ] },
+  { date:"7.2", weekday:"周四", chapter:"Ch3 信道与噪声", isRest:false, note:"",
+    min:[  "§5 随参信道（若昨天未做）+ §6 信道中的噪声 + §7 信道容量（香农公式）",
+           "Ch3 课后练习 + 题库 + 错题梳理" ],
+    extra:[ "Ch4 §1 调制的概念与分类" ] },
+  { date:"7.3", weekday:"周五", chapter:"Ch4 模拟调制系统", isRest:false, note:"",
+    min:[  "§1 调制概念与分类 + §2 线性调制原理（AM/DSB/SSB/VSB）+ §3 线性调制抗噪性能" ],
+    extra:[ "§4 非线性调制原理（FM/PM）" ] },
+  { date:"7.4", weekday:"周六", chapter:"Ch4 模拟调制系统", isRest:false, note:"Ch4 是全书最重要的章节之一，课后练习+题库务必全部做完。",
+    min:[  "§4 非线性调制（若昨天未做）+ §5 调频抗噪 + §6 各种模拟调制比较 + §7 FDM",
+           "Ch4 课后练习 + 题库 + 错题梳理" ],
+    extra:[ "Ch5 §1 PCM 概念" ] },
+  { date:"7.5", weekday:"周日", chapter:"休息日 🔴", isRest:true, note:"",
+    min:[  "翻看 Ch3~Ch4 错题，标记反复出错点",
+           "画一张模拟调制分类思维导图" ],
+    extra:[] },
+  { date:"7.6", weekday:"周一", chapter:"Ch5 模拟信号的数字化", isRest:false, note:"",
+    min:[  "§1 PCM 概念 + §2 理想低通/带通抽样 + §3 实际抽样 + §4 均匀/非均匀量化" ],
+    extra:[ "§5 PCM 编码（A律13折线）" ] },
+  { date:"7.7", weekday:"周二", chapter:"Ch5 模拟信号的数字化", isRest:false, note:"PCM 编码（A律13折线）是重点中的重点，课后练习务必动手算一遍。",
+    min:[  "§5 PCM 编码 + §6 ADPCM + §7 增量调制 + §8 时分多路复用",
+           "Ch5 课后练习 + 题库 + 错题梳理" ],
+    extra:[ "Ch6 §1 数字基带传输概念与系统构成" ] },
+  { date:"7.8", weekday:"周三", chapter:"休息日 🔴", isRest:true, note:"",
+    min:[  "回顾本周内容，轻松翻看笔记" ],
+    extra:[] },
+  { date:"7.9", weekday:"周四", chapter:"Ch6 数字基带传输系统", isRest:false, note:"",
+    min:[  "§1 基带概念与系统构成 + §2 基带信号频谱 + §3 码间串扰（ISI）+ §4 部分响应系统" ],
+    extra:[ "§5 基带系统抗噪性能分析" ] },
+  { date:"7.10", weekday:"周五", chapter:"Ch6 数字基带传输系统", isRest:false, note:"码间串扰和眼图是高频考点，课后练习中的眼图识别题务必做对。",
+    min:[  "§5 抗噪性能（若昨天未做）+ §6 眼图 + §7 时域均衡",
+           "Ch6 课后练习 + 题库 + 错题梳理" ],
+    extra:[ "Ch7 §1 数字调制概念与分类 + §2 二进制数字调制原理" ] },
+  { date:"7.11", weekday:"周六", chapter:"休息日 🔴", isRest:true, note:"",
+    min:[  "翻看 Ch5~Ch6 错题" ],
+    extra:[] },
+  { date:"7.12", weekday:"周日", chapter:"Ch7 数字调制系统", isRest:false, note:"Ch7 与 Ch4 对照学效率更高——框架类似，重点做 2ASK/2FSK/2PSK 带宽和误码率计算。",
+    min:[  "§1 数字调制概念 + §2 二进制调制（2ASK/2FSK/2PSK/2DPSK）+ §3 二进制调制性能 + §4 多进制调制",
+           "Ch7 课后练习 + 题库 + 错题梳理" ],
+    extra:[ "Ch8 §1 差错控制编码基本概念 + §2 信道编码基本原理" ] },
+  { date:"7.13", weekday:"周一", chapter:"Ch8 差错控制 + Ch9 同步", isRest:false, note:"",
+    min:[  "Ch8 §1~3（基本概念 + 信道编码原理 + 线性分组码）",
+           "Ch8 课后练习 + 题库 + 错题梳理",
+           "Ch9 §1 同步概念 + §2 载波同步 + §3 位同步" ],
+    extra:[ "Ch9 §4 群同步 + §5 网同步" ] },
+  { date:"7.14", weekday:"周二", chapter:"Ch10 最佳接收 + 知识点⑩", isRest:false, note:"",
+    min:[  "Ch9 §4-5（若昨天未做）+ Ch9 课后练习 + 题库 + 错题梳理",
+           "Ch10 §1~5（最佳接收准则 → 匹配滤波器 → 误码性能）+ 课后练习 + 题库 + 错题梳理" ],
+    extra:[ "知识点⑩ 通信标准及组织 + 重做各章 B/C 档错题" ] }
+];
+
+// ===== STATE =====
+const STORAGE_KEY = 'comm_phase1_state';
+const OPEN_KEY = 'comm_phase1_open';
+const ROW_ID = 'phase1';
+let state = defaultState();
+let syncTimer = null;
+
+function defaultState(){
+  return planData.map(d => ({
+    minTasks: d.min.map(() => false),
+    extraTasks: d.extra.map(() => false),
+    checkedIn: false
+  }));
+}
+
+// ===== LOCAL STORAGE =====
+function loadLocalState(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(raw){
+      const saved = JSON.parse(raw);
+      if(saved.length === planData.length) return saved;
+    }
+  }catch(e){}
+  return null;
+}
+function saveLocalState(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+
+function loadLocalOpen(){
+  try{
+    const raw = localStorage.getItem(OPEN_KEY);
+    if(raw) return new Set(JSON.parse(raw));
+  }catch(e){}
+  return new Set();
+}
+function saveLocalOpen(){
+  const openSet = new Set();
+  document.querySelectorAll('.day.open').forEach(el => {
+    const allDays = [...document.querySelectorAll('.day')];
+    openSet.add(allDays.indexOf(el));
+  });
+  localStorage.setItem(OPEN_KEY, JSON.stringify([...openSet]));
+}
+
+// ===== SUPABASE SYNC =====
+function setSyncStatus(status){
+  const el = document.getElementById('syncIndicator');
+  el.className = 'sync-status ' + status;
+  if(status === 'synced') el.textContent = '☁️ 已同步';
+  else if(status === 'syncing') el.textContent = '🔄 同步中…';
+  else if(status === 'offline') el.textContent = '⚠️ 离线（数据已存本地）';
+}
+
+async function loadFromSupabase(){
+  if(!SUPABASE_CONFIGURED) return null;
+  try{
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/study_state?id=eq.${ROW_ID}&select=state`,
+      { headers:{ 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }
+    );
+    if(!res.ok) return null;
+    const data = await res.json();
+    if(data.length > 0 && data[0].state){
+      const s = data[0].state;
+      if(s.length === planData.length) return s;
+    }
+    return null;
+  }catch(e){ return null; }
+}
+
+async function saveToSupabase(){
+  if(!SUPABASE_CONFIGURED) return;
+  setSyncStatus('syncing');
+  try{
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/study_state`,
+      {
+        method: 'POST',
+        headers:{
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'resolution=merge-duplicates'
+        },
+        body: JSON.stringify({ id: ROW_ID, state: state, updated_at: new Date().toISOString() })
+      }
+    );
+    if(res.ok){ setSyncStatus('synced'); }
+    else{ setSyncStatus('offline'); }
+  }catch(e){ setSyncStatus('offline'); }
+}
+
+function debouncedSync(){
+  if(syncTimer) clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => saveToSupabase(), 800);
+}
+
+// ===== INIT =====
+async function initState(){
+  // Try Supabase first
+  const remoteState = await loadFromSupabase();
+  if(remoteState){
+    state = remoteState;
+    saveLocalState();
+    setSyncStatus('synced');
+  } else {
+    // Fall back to local
+    const local = loadLocalState();
+    if(local){
+      state = local;
+      setSyncStatus('offline');
+      // Try to push local to Supabase
+      if(SUPABASE_CONFIGURED) debouncedSync();
+    } else {
+      state = defaultState();
+      setSyncStatus('synced');
+    }
+  }
+  rebuildAll();
+}
+
+// ===== FIND FIRST INCOMPLETE DAY =====
+function firstIncompleteDay(){
+  for(let di = 0; di < planData.length; di++){
+    const st = state[di];
+    const minDone = planData[di].min.length === 0 || st.minTasks.every(t => t);
+    const extraDone = planData[di].extra.length === 0 || st.extraTasks.every(t => t);
+    if(!minDone || !extraDone || (!planData[di].isRest && !st.checkedIn)) return di;
+  }
+  return 0;
+}
+
+// ===== RENDER =====
+const container = document.getElementById('daysContainer');
+
+function renderDay(day, di){
+  const st = state[di];
+  const dayDiv = document.createElement('div');
+  dayDiv.className = 'day' + (day.isRest ? ' rest' : '');
+  const savedOpen = loadLocalOpen();
+  if(savedOpen.has(di) || (di === firstIncompleteDay() && savedOpen.size === 0)){
+    dayDiv.classList.add('open');
+  }
+
+  const checkinHTML = day.isRest
+    ? '<span class="checkin-badge done">休息</span>'
+    : (st.checkedIn
+        ? '<span class="checkin-badge done">✓ 已打卡</span>'
+        : '<span class="checkin-badge pending">待打卡</span>');
+
+  dayDiv.innerHTML = `
+    <div class="day-header">
+      <div class="left">
+        <span class="day-date">${day.date}</span>
+        <span class="day-weekday">${day.weekday}</span>
+        <span class="day-chapter">${day.chapter}</span>
+      </div>
+      <div class="right">${checkinHTML}<span class="day-arrow">▶</span></div>
+    </div>
+    <div class="day-body">
+      ${day.min.length ? `
+      <div class="task-group">
+        <div class="task-group-label"><span class="badge min">保底</span> 保底任务</div>
+        ${day.min.map((t, ti) => `
+          <div class="task">
+            <input type="checkbox" id="min_${di}_${ti}" ${st.minTasks[ti] ? 'checked' : ''}>
+            <label for="min_${di}_${ti}">${t}</label>
+          </div>`).join('')}
+      </div>` : ''}
+      ${day.extra.length ? `
+      <div class="task-group">
+        <div class="task-group-label"><span class="badge extra">有余</span> 学有余力</div>
+        ${day.extra.map((t, ti) => `
+          <div class="task">
+            <input type="checkbox" id="extra_${di}_${ti}" ${st.extraTasks[ti] ? 'checked' : ''}>
+            <label for="extra_${di}_${ti}">${t}</label>
+          </div>`).join('')}
+      </div>` : ''}
+      ${day.note ? `<div class="chapter-note">⚠️ ${day.note}</div>` : ''}
+      <div class="btn-row">
+        ${day.isRest ? '' : `<button class="btn btn-checkin${st.checkedIn ? ' done' : ''}" data-day="${di}" data-action="checkin">${st.checkedIn ? '✓ 已打卡' : '📋 打卡'}</button>`}
+        <button class="btn btn-reset" data-day="${di}" data-action="reset">重置当天</button>
+      </div>
+    </div>`;
+  container.appendChild(dayDiv);
+
+  dayDiv.querySelector('.day-header').addEventListener('click', () => {
+    dayDiv.classList.toggle('open');
+    saveLocalOpen();
+  });
+}
+
+function rebuildAll(){
+  container.innerHTML = '';
+  planData.forEach((day, di) => renderDay(day, di));
+  updateProgress();
+}
+
+// ===== PROGRESS =====
+function updateProgress(){
+  let totalTasks = 0, doneTasks = 0;
+  let completedDays = 0;
+  planData.forEach((day, di) => {
+    const st = state[di];
+    day.min.forEach((_, ti) => { totalTasks++; if(st.minTasks[ti]) doneTasks++; });
+    day.extra.forEach((_, ti) => { totalTasks++; if(st.extraTasks[ti]) doneTasks++; });
+    const minDone = day.min.length === 0 || st.minTasks.every(t => t);
+    const extraDone = day.extra.length === 0 || st.extraTasks.every(t => t);
+    if(minDone && extraDone && (day.isRest || st.checkedIn)) completedDays++;
+  });
+  const pct = totalTasks > 0 ? Math.round(doneTasks / totalTasks * 100) : 0;
+  document.getElementById('overallPct').textContent = pct + '%';
+  document.getElementById('overallBar').style.width = pct + '%';
+  const checkedInCount = state.filter((s,i) => !planData[i].isRest && s.checkedIn).length;
+  const totalStudyDays = planData.filter(d => !d.isRest).length;
+  document.getElementById('progressDetail').innerHTML = `
+    <span>📅 天数 ${completedDays}/${planData.length}</span>
+    <span>✅ 任务 ${doneTasks}/${totalTasks}</span>
+    <span>📋 打卡 ${checkedInCount}/${totalStudyDays}</span>`;
+}
+
+// ===== EVENT DELEGATION =====
+container.addEventListener('change', e => {
+  if(e.target.tagName !== 'INPUT') return;
+  const match = e.target.id.match(/^(min|extra)_(\d+)_(\d+)$/);
+  if(!match) return;
+  const [, type, di, ti] = match;
+  if(type === 'min') state[parseInt(di)].minTasks[parseInt(ti)] = e.target.checked;
+  else state[parseInt(di)].extraTasks[parseInt(ti)] = e.target.checked;
+  saveLocalState();
+  debouncedSync();
+  updateProgress();
+});
+
+container.addEventListener('click', e => {
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  const di = parseInt(btn.dataset.day);
+  const action = btn.dataset.action;
+  if(action === 'checkin'){
+    state[di].checkedIn = !state[di].checkedIn;
+    saveLocalState();
+    debouncedSync();
+    rebuildAll();
+  } else if(action === 'reset'){
+    state[di] = { minTasks: planData[di].min.map(() => false), extraTasks: planData[di].extra.map(() => false), checkedIn: false };
+    saveLocalState();
+    debouncedSync();
+    rebuildAll();
+  }
+});
+
+// ===== START =====
+initState();
+</script>
+</body>
+</html>
