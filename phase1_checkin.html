@@ -96,12 +96,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 </div>
 
 <div class="progress-section">
-  <div class="progress-label"><span>整体进度</span><span class="pct" id="overallPct">0%</span></div>
+  <div class="progress-label"><span>整体进度</span><span class="pct" id="overallPct">加载中…</span></div>
   <div class="progress-bar"><div class="progress-fill" id="overallBar" style="width:0%"></div></div>
   <div class="progress-detail" id="progressDetail"></div>
 </div>
 
-<div id="daysContainer"></div>
+<div id="daysContainer" style="display:none"><div style="text-align:center;padding:40px;color:var(--muted);font-size:.9rem">正在加载数据…</div></div>
 
 <div class="footer">
   <span id="syncIndicator" class="sync-status synced">☁️ 已同步</span>
@@ -173,6 +173,7 @@ const planData = [
 // ===== STATE =====
 const STORAGE_KEY = 'comm_phase1_state';
 const OPEN_KEY = 'comm_phase1_open';
+const TOGGLED_KEY = 'comm_phase1_toggled';
 const ROW_ID = 'phase1';
 let state = defaultState();
 let syncTimer = null;
@@ -212,6 +213,7 @@ function saveLocalOpen(){
     openSet.add(allDays.indexOf(el));
   });
   localStorage.setItem(OPEN_KEY, JSON.stringify([...openSet]));
+  localStorage.setItem(TOGGLED_KEY, '1');
 }
 
 // ===== SUPABASE SYNC =====
@@ -269,37 +271,24 @@ function debouncedSync(){
 
 // ===== INIT =====
 async function initState(){
-  // Try Supabase first
   const remoteState = await loadFromSupabase();
   if(remoteState){
     state = remoteState;
     saveLocalState();
     setSyncStatus('synced');
   } else {
-    // Fall back to local
     const local = loadLocalState();
     if(local){
       state = local;
       setSyncStatus('offline');
-      // Try to push local to Supabase
       if(SUPABASE_CONFIGURED) debouncedSync();
     } else {
       state = defaultState();
       setSyncStatus('synced');
     }
   }
+  document.getElementById('daysContainer').style.display = 'block';
   rebuildAll();
-}
-
-// ===== FIND FIRST INCOMPLETE DAY =====
-function firstIncompleteDay(){
-  for(let di = 0; di < planData.length; di++){
-    const st = state[di];
-    const minDone = planData[di].min.length === 0 || st.minTasks.every(t => t);
-    const extraDone = planData[di].extra.length === 0 || st.extraTasks.every(t => t);
-    if(!minDone || !extraDone || (!planData[di].isRest && !st.checkedIn)) return di;
-  }
-  return 0;
 }
 
 // ===== RENDER =====
@@ -310,7 +299,9 @@ function renderDay(day, di){
   const dayDiv = document.createElement('div');
   dayDiv.className = 'day' + (day.isRest ? ' rest' : '');
   const savedOpen = loadLocalOpen();
-  if(savedOpen.has(di) || (di === firstIncompleteDay() && savedOpen.size === 0)){
+  const hasToggled = localStorage.getItem(TOGGLED_KEY);
+  // 首次打开：全部展开。手动折叠过：按记忆恢复。
+  if(!hasToggled || savedOpen.has(di)){
     dayDiv.classList.add('open');
   }
 
