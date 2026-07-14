@@ -226,6 +226,29 @@ const planData = [
     extra:[ "通信标准及组织：ITU / IEEE / 3GPP / IETF 做一页速记" ] }
 ];
 
+// 通信原理全书进度口径：
+// 按讲义目录从第一个小节开始统计：Ch2(9) + Ch3(7) + Ch4(7) + Ch5(8) + Ch6(7) + Ch7(4) + Ch8(3) + Ch9(5) + Ch10(5) = 55
+// 当前已学到 Ch4 §4，因此 Ch2 全部 + Ch3 全部 + Ch4 §1-3 先计入已完成，共 19 个小节。
+const TOTAL_COMM_SECTIONS = 55;
+const PREPLAN_COMPLETED_SECTIONS = 19;
+const DAY_SECTION_CREDITS = [
+  1,  // 7.14 Ch4 §4
+  3,  // 7.15 Ch4 §5-7
+  0,  // 7.16 Ch4 练习
+  4,  // 7.17 Ch5 §1-4
+  0,  // 7.18 轻休息
+  4,  // 7.19 Ch5 §5-8
+  0,  // 7.20 Ch5 练习
+  3,  // 7.21 Ch6 §1-3
+  0,  // 7.22 轻休息
+  4,  // 7.23 Ch6 §4-7
+  0,  // 7.24 Ch6 练习
+  4,  // 7.25 Ch7 §1-4
+  0,  // 7.26 Ch7 练习
+  3,  // 7.27 Ch8 §1-3
+  10  // 7.28 Ch9 §1-5 + Ch10 §1-5
+];
+
 // ===== STATE =====
 const STORAGE_KEY = 'comm_phase1_v2_state';
 const OPEN_KEY = 'comm_phase1_v2_open';
@@ -573,24 +596,27 @@ function rebuildAll(){
 
 // ===== PROGRESS =====
 function updateProgress(){
-  let totalTasks = 0, doneTasks = 0;
+  let taskTotal = 0, taskDone = 0;
+  let sectionDone = PREPLAN_COMPLETED_SECTIONS;
   let completedDays = 0;
   planData.forEach((day, di) => {
     const st = state[di];
-    day.min.forEach((_, ti) => { totalTasks++; if(st.minTasks[ti]) doneTasks++; });
-    day.extra.forEach((_, ti) => { totalTasks++; if(st.extraTasks[ti]) doneTasks++; });
+    day.min.forEach((_, ti) => { taskTotal++; if(st.minTasks[ti]) taskDone++; });
+    day.extra.forEach((_, ti) => { taskTotal++; if(st.extraTasks[ti]) taskDone++; });
     const minDone = day.min.length === 0 || st.minTasks.every(t => t);
     const extraDone = day.extra.length === 0 || st.extraTasks.every(t => t);
+    if(minDone) sectionDone += DAY_SECTION_CREDITS[di] || 0;
     if(minDone && extraDone && (day.isRest || st.checkedIn)) completedDays++;
   });
-  const pct = totalTasks > 0 ? Math.round(doneTasks / totalTasks * 100) : 0;
+  const pct = Math.round(sectionDone / TOTAL_COMM_SECTIONS * 100);
   document.getElementById('overallPct').textContent = pct + '%';
   document.getElementById('overallBar').style.width = pct + '%';
   const checkedInCount = state.filter((s,i) => !planData[i].isRest && s.checkedIn).length;
   const totalStudyDays = planData.filter(d => !d.isRest).length;
   document.getElementById('progressDetail').innerHTML = `
-    <span>📅 天数 ${completedDays}/${planData.length}</span>
-    <span>✅ 任务 ${doneTasks}/${totalTasks}</span>
+    <span>📚 全书小节 ${sectionDone}/${TOTAL_COMM_SECTIONS}</span>
+    <span>✅ 当前计划任务 ${taskDone}/${taskTotal}</span>
+    <span>📅 计划天数 ${completedDays}/${planData.length}</span>
     <span>📋 打卡 ${checkedInCount}/${totalStudyDays}</span>`;
 }
 
