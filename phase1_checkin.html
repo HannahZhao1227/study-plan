@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>通信原理 · 阶段一打卡</title>
+<title>通信原理 · 重启补完计划</title>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -108,18 +108,26 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
   .task{font-size:.8rem}
   .btn{padding:5px 10px;font-size:.75rem}
 }
+
+/* Sync bar */
+.sync-bar{display:flex;gap:8px;align-items:center;justify-content:center;padding:10px;margin-bottom:12px;background:var(--card);border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.sync-bar .hint{font-size:.75rem;color:var(--muted);margin-right:4px}
+.sync-bar .btn-sm{padding:4px 10px;font-size:.72rem;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);cursor:pointer;font-weight:600}
+.sync-bar .btn-sm:active{opacity:.7}
+.sync-bar .copied{color:var(--success);font-size:.72rem;display:none}
+}
 </style>
 </head>
 <body>
 
 <div class="header">
-  <h1>通信原理 · 阶段一 打卡</h1>
-  <div class="meta">新版计划：7月14日 — 7月28日 · 当前从 Ch4 §4 重启 · 每天保底≈2h</div>
+  <h1>通信原理 · 重启补完计划（7.24 — 8.12）</h1>
+  <div class="meta">实习收尾 + 出游休息 + 返程缓冲 · 8.10 学完，8.11-8.12 补漏</div>
 </div>
 
 <div class="calendar-section">
   <div class="countdown-row">
-    <div class="countdown-item phase" id="phaseCountdown"><div class="label">通信原理剩余</div><div class="num">-</div><div class="unit">天 · 7.28 截止</div></div>
+    <div class="countdown-item phase" id="phaseCountdown"><div class="label">通信原理剩余</div><div class="num">-</div><div class="unit">天 · 8.10 学完</div></div>
     <div class="countdown-item exam" id="examCountdown"><div class="label">距国网考试</div><div class="num">-</div><div class="unit">天 · 12.05 考试</div></div>
   </div>
   <div class="motto" id="mottoText"></div>
@@ -132,347 +140,295 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
   <div class="progress-detail" id="progressDetail"></div>
 </div>
 
-<div id="daysContainer" style="display:none"><div style="text-align:center;padding:40px;color:var(--muted);font-size:.9rem">正在加载数据…</div></div>
+<div class="sync-bar">
+  <span class="hint">PC ↔ iPad 同步：</span>
+  <button class="btn-sm" id="btnExport" onclick="exportData()">导出数据</button>
+  <button class="btn-sm" id="btnImport" onclick="importData()">导入数据</button>
+  <span class="copied" id="copiedHint">已复制到剪贴板</span>
+</div>
+
+<div id="daysContainer"><div style="text-align:center;padding:40px;color:var(--muted);font-size:.9rem">正在加载数据…</div></div>
 
 <div class="footer">
-  <span id="syncIndicator" class="sync-status synced">☁️ 已同步</span>
-  &nbsp; 数据自动同步至云端 · 手机/电脑/平板共享进度
+  <span id="syncIndicator" class="sync-status synced">☁️ 数据存于本地</span>
+  &nbsp; 打卡记录保存在浏览器中 · 更换设备需重新打卡
 </div>
 
 <script>
-// ===== SUPABASE CONFIG =====
-// TODO: replace with your real project URL and anon key
-const SUPABASE_URL = 'https://bdjoupucarzjxadkrbbr.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_9d4lYpbtLHcZ1YlJ8zisdw_rqGmML0r'; // ← 确认完整
-const SUPABASE_CONFIGURED = SUPABASE_URL.includes('YOUR-PROJECT') === false;
+(function(){
+'use strict';
 
 // ===== DATA =====
-const planData = [
-  { date:"7.14", weekday:"周二", chapter:"重启日 · Ch4 §4", isRest:false, note:"今天不是补偿过去，而是重新点火。只要打开讲义学 15 分钟，就算重新启动。",
-    min:[  "Ch4 §4 非线性调制基本原理（FM/PM）",
-           "整理 AM / DSB / SSB / VSB / FM / PM 对比表",
-           "做 3-5 道 Ch4 对应小题，先找回手感" ],
-    extra:[ "Ch4 §5 调频系统抗噪声性能" ] },
-  { date:"7.15", weekday:"周三", chapter:"Ch4 模拟调制收尾", isRest:false, note:"Ch4 是后续调制内容的地基，今天只收尾知识点，不急着全刷题。",
-    min:[  "Ch4 §5 调频系统抗噪声性能",
-           "Ch4 §6 各种模拟调制系统比较",
-           "Ch4 §7 频分复用" ],
-    extra:[ "Ch4 课后练习概念题 / 选择题先做一部分" ] },
-  { date:"7.16", weekday:"周四", chapter:"Ch4 练习日", isRest:false, note:"这一日的目标是把 Ch4 闭环：讲义题、题库、错题都走一遍。",
-    min:[  "Ch4 课后练习做完",
-           "电网题库 Ch4 对应章节做完",
-           "错题按 A粗心 / B不熟 / C不会 标记" ],
-    extra:[ "单独整理 Ch4 高频公式：带宽、抗噪、调制方式比较" ] },
-  { date:"7.17", weekday:"周五", chapter:"Ch5 前半 · 抽样与量化", isRest:false, note:"",
-    min:[  "Ch5 §1 PCM 概念",
-           "Ch5 §2 理想低通抽样、带通抽样",
-           "Ch5 §3 实际抽样",
-           "Ch5 §4 均匀量化和非均匀量化" ],
-    extra:[ "预习 Ch5 §5 PCM 编码" ] },
-  { date:"7.18", weekday:"周六", chapter:"轻休息 · 防断档", isRest:true, note:"休息日不是失联日，20 分钟就够。维持手感比硬撑更重要。",
-    min:[  "20 分钟翻 Ch4 错题",
-           "看一遍 Ch5 目录，知道后面要学什么" ],
-    extra:[ "做 5 道 Ch5 抽样 / 量化题" ] },
-  { date:"7.19", weekday:"周日", chapter:"Ch5 后半 · PCM 重点", isRest:false, note:"PCM 编码和 A律13折线容易考计算，别只看懂，一定要动手算。",
-    min:[  "Ch5 §5 PCM 编码",
-           "Ch5 §6 ADPCM",
-           "Ch5 §7 增量调制",
-           "Ch5 §8 时分多路复用" ],
-    extra:[ "手算 2-3 道 PCM / A律13折线题" ] },
-  { date:"7.20", weekday:"周一", chapter:"Ch5 练习日", isRest:false, note:"",
-    min:[  "Ch5 课后练习做完",
-           "电网题库 Ch5 对应章节做完",
-           "错题整理" ],
-    extra:[ "Ch6 §1 数字基带传输概念与系统构成" ] },
-  { date:"7.21", weekday:"周二", chapter:"Ch6 前半 · 基带与码间串扰", isRest:false, note:"码间串扰是高频考点，今天不要贪快，要把“为什么会串扰”弄明白。",
-    min:[  "Ch6 §1 数字基带传输概念与系统构成",
-           "Ch6 §2 数字基带信号及其频谱特性",
-           "Ch6 §3 数字基带脉冲传输与码间串扰" ],
-    extra:[ "Ch6 §4 部分响应系统" ] },
-  { date:"7.22", weekday:"周三", chapter:"轻休息 · Ch6 缓冲", isRest:true, note:"",
-    min:[  "如果 7.21 没完成，先补 Ch6 §3",
-           "如果已完成，只看 20 分钟眼图 / 码间串扰笔记" ],
-    extra:[ "Ch6 §4 部分响应系统" ] },
-  { date:"7.23", weekday:"周四", chapter:"Ch6 后半", isRest:false, note:"眼图和均衡是题里很喜欢出的点，看到图不要慌，先判断码间串扰和噪声。",
-    min:[  "Ch6 §4 部分响应系统",
-           "Ch6 §5 数字基带传输系统抗噪性能分析",
-           "Ch6 §6 眼图",
-           "Ch6 §7 时域均衡" ],
-    extra:[ "做 Ch6 课后练习前半" ] },
-  { date:"7.24", weekday:"周五", chapter:"Ch6 练习日", isRest:false, note:"",
-    min:[  "Ch6 课后练习做完",
-           "电网题库 Ch6 对应章节做完",
-           "错题整理" ],
-    extra:[ "预习 Ch7 §1 数字调制概念与分类 + §2 二进制数字调制原理" ] },
-  { date:"7.25", weekday:"周六", chapter:"Ch7 数字调制", isRest:false, note:"Ch7 可以和 Ch4 对照学：模拟调制是连续消息，数字调制是离散符号。",
-    min:[  "Ch7 §1 数字调制概念与分类",
-           "Ch7 §2 二进制数字调制原理",
-           "Ch7 §3 二进制数字调制系统性能",
-           "Ch7 §4 多进制数字调制原理" ],
-    extra:[ "做一张 Ch4 模拟调制 vs Ch7 数字调制对照表" ] },
-  { date:"7.26", weekday:"周日", chapter:"轻休息 · Ch7 练习", isRest:true, note:"今天是轻量日，但要把 Ch7 练习往前推一点，避免周一堆债。",
-    min:[  "Ch7 课后练习做完",
-           "电网题库 Ch7 至少做一半" ],
-    extra:[ "Ch7 题库做完 + 错题整理" ] },
-  { date:"7.27", weekday:"周一", chapter:"Ch8 差错控制 + Ch9 同步预热", isRest:false, note:"",
-    min:[  "Ch8 §1 差错控制编码基本概念",
-           "Ch8 §2 信道编码基本原理",
-           "Ch8 §3 线性分组码",
-           "Ch8 课后练习 + 题库 + 错题" ],
-    extra:[ "Ch9 §1 同步概念与分类 + §2 载波同步" ] },
-  { date:"7.28", weekday:"周二", chapter:"Ch9 + Ch10 + 通信标准收官", isRest:false, note:"这是通信原理新版 DDL。完成不了也别崩，7.29-7.31 是专门留的保险丝。",
-    min:[  "Ch9 §1-5 同步技术 + 课后练习 + 题库 + 错题",
-           "Ch10 §1-5 数字信号最佳接收 + 课后练习 + 题库 + 错题" ],
-    extra:[ "通信标准及组织：ITU / IEEE / 3GPP / IETF 做一页速记" ] }
+var planData = [
+  { date:"7.24", weekday:"周五", chapter:"实习期 · Ch4 收尾", isRest:false,
+    note:"今天只做一件事：把 Ch4 剩余知识点收掉。别回头看旧计划，那已经作废。",
+    min:["Ch4 §6 各种模拟调制系统比较",
+         "Ch4 §7 频分复用（FDM）"],
+    extra:["Ch4 课后练习先做一部分"] },
+  { date:"7.25", weekday:"周六", chapter:"实习期 · Ch4 练习闭环", isRest:false,
+    note:"Ch4 结束要有闭环：课后练习、题库、错题。不求完美，但要完成一轮。",
+    min:["Ch4 课后练习做完",
+         "电网题库 Ch4 对应章节做完",
+         "Ch4 错题按 A粗心 / B不熟 / C不会 标记"],
+    extra:["整理 AM / DSB / SSB / VSB / FM / PM 对比表"] },
+  { date:"7.26", weekday:"周日", chapter:"可稍多学 · Ch5 前半", isRest:false,
+    note:"Ch5 是重点章，今天先拿下抽样和量化。",
+    min:["Ch5 §1 PCM 概念",
+         "Ch5 §2 理想低通抽样、带通抽样",
+         "Ch5 §3 实际抽样",
+         "Ch5 §4 均匀量化和非均匀量化"],
+    extra:["预习 Ch5 §5 PCM 编码"] },
+  { date:"7.27", weekday:"周一", chapter:"实习期 · PCM 编码", isRest:false,
+    note:"A律13折线不要只看，至少动手算两题。",
+    min:["Ch5 §5 PCM 编码（A律13折线）",
+         "手算 2 道 PCM 编码题"],
+    extra:["Ch5 §6 ADPCM"] },
+  { date:"7.28", weekday:"周二", chapter:"实习期 · Ch5 收尾", isRest:false,
+    note:"今天把 Ch5 内容学完，题可以明天闭环。",
+    min:["Ch5 §6 ADPCM",
+         "Ch5 §7 增量调制",
+         "Ch5 §8 时分多路复用和多路数字电话系统"],
+    extra:["Ch5 课后练习做一半"] },
+  { date:"7.29", weekday:"周三", chapter:"实习期 · Ch5 练习日", isRest:false,
+    note:"练习日不是浪费时间，是把‘看懂’变成‘会做’。",
+    min:["Ch5 课后练习做完",
+         "电网题库 Ch5 对应章节做完",
+         "Ch5 错题整理"],
+    extra:["预习 Ch6 §1 数字基带传输概念"] },
+  { date:"7.30", weekday:"周四", chapter:"实习期 · 轻复盘", isRest:false,
+    note:"实习快结束，今天不加新课，防止疲劳反扑。",
+    min:["回看 Ch4/Ch5 错题 30 分钟",
+         "整理 Ch5 高频公式：抽样定理、量化、PCM"],
+    extra:["如果状态好，提前看 Ch6 §1"] },
+  { date:"7.31", weekday:"周五", chapter:"实习结束日 · 轻任务", isRest:false,
+    note:"实习最后一天，不硬压。只要不断档，就是胜利。",
+    min:["轻任务：回看 Ch4/Ch5 错题 30 分钟",
+         "收拾一下通信原理笔记目录，标记未掌握点"],
+    extra:["不建议加量，早点休息"] },
+  { date:"8.1", weekday:"周六", chapter:"过渡日 · Ch6 前半", isRest:false,
+    note:"出游前把 Ch6 前半启动起来，回来才不会完全断线。",
+    min:["Ch6 §1 数字基带传输概念与系统构成",
+         "Ch6 §2 数字基带信号及其频谱特性",
+         "Ch6 §3 数字基带脉冲传输与码间串扰"],
+    extra:["Ch6 §4 部分响应系统"] },
+  { date:"8.2", weekday:"周日", chapter:"出去玩 · 完全休息", isRest:true,
+    note:"计划内休息。好好玩，不用内疚。",
+    min:[],
+    extra:[] },
+  { date:"8.3", weekday:"周一", chapter:"出去玩 · 完全休息", isRest:true,
+    note:"今天不学习。让脑子真正休息，回来才有电。",
+    min:[],
+    extra:[] },
+  { date:"8.4", weekday:"周二", chapter:"出去玩 · 完全休息", isRest:true,
+    note:"最后一天休息。晚上如果想看，只能随手翻 5 分钟，不设任务。",
+    min:[],
+    extra:[] },
+  { date:"8.5", weekday:"周三", chapter:"恢复日 · Ch6 后半", isRest:false,
+    note:"休息后第一天不要追求爆发，先恢复手感。",
+    min:["Ch6 §4 部分响应系统",
+         "Ch6 §5 数字基带传输系统抗噪性能分析",
+         "Ch6 §6 眼图",
+         "Ch6 §7 时域均衡"],
+    extra:["Ch6 课后练习做一半"] },
+  { date:"8.6", weekday:"周四", chapter:"Ch6 练习日", isRest:false,
+    note:"码间串扰和眼图是高频点，练习里遇到图题不要跳。",
+    min:["Ch6 课后练习做完",
+         "电网题库 Ch6 对应章节做完",
+         "Ch6 错题整理"],
+    extra:["预习 Ch7 §1-§2"] },
+  { date:"8.7", weekday:"周五", chapter:"早上飞机 · 轻任务", isRest:false,
+    note:"坐飞机日，只安排轻任务。别在路上和自己较劲。",
+    min:["Ch7 §1 数字调制概念与分类",
+         "Ch7 §2 二进制数字调制原理"],
+    extra:["飞机/路上听课或看 Ch7 笔记，不强求做题"] },
+  { date:"8.8", weekday:"周六", chapter:"Ch7 收尾与练习", isRest:false,
+    note:"Ch7 和 Ch4 对照学，框架很像：一个模拟，一个数字。",
+    min:["Ch7 §3 二进制数字调制系统性能",
+         "Ch7 §4 多进制数字调制原理",
+         "Ch7 课后练习做完"],
+    extra:["电网题库 Ch7 做完 + 错题整理"] },
+  { date:"8.9", weekday:"周日", chapter:"Ch8 差错控制", isRest:false,
+    note:"Ch8 以概念理解为主，别被编码名词吓住。",
+    min:["Ch8 §1 差错控制编码技术基本概念",
+         "Ch8 §2 信道编码基本原理",
+         "Ch8 §3 线性分组码",
+         "Ch8 课后练习 + 题库 + 错题"],
+    extra:["预习 Ch9 §1 同步概念"] },
+  { date:"8.10", weekday:"周一", chapter:"DDL日 · Ch9 + Ch10 快速过完", isRest:false,
+    note:"今天是通信原理学习 DDL。目标是先过完，不追求当天全会。",
+    min:["Ch9 §1-§5 通信系统同步技术",
+         "Ch10 §1-§5 数字信号的最佳接收"],
+    extra:["通信标准及组织：ITU / IEEE / 3GPP / IETF 做一页速记"] },
+  { date:"8.11", weekday:"周二", chapter:"补漏日 · Ch9/Ch10 练习", isRest:false,
+    note:"今天不学新课，只把 Ch9/Ch10 的题补上。",
+    min:["Ch9 课后练习 + 题库 + 错题",
+         "Ch10 课后练习 + 题库 + 错题"],
+    extra:["B/C 类错题重做一轮"] },
+  { date:"8.12", weekday:"周三", chapter:"通信原理总收尾", isRest:false,
+    note:"收尾日。把散乱的知识点收成一张网，后面才好进入光纤通信。",
+    min:["通信原理总错题清理",
+         "画一张通信原理总框架图",
+         "标记 Ch4/Ch5/Ch6 三个重点章仍不会的点"],
+    extra:["为光纤通信阶段整理目录和资料"] }
 ];
 
-// 通信原理全书进度口径：
-// 按讲义目录从第一个小节开始统计：Ch2(9) + Ch3(7) + Ch4(7) + Ch5(8) + Ch6(7) + Ch7(4) + Ch8(3) + Ch9(5) + Ch10(5) = 55
-// 当前已学到 Ch4 §4，因此 Ch2 全部 + Ch3 全部 + Ch4 §1-3 先计入已完成，共 19 个小节。
-const TOTAL_COMM_SECTIONS = 55;
-const PREPLAN_COMPLETED_SECTIONS = 19;
-const DAY_SECTION_CREDITS = [
-  1,  // 7.14 Ch4 §4
-  3,  // 7.15 Ch4 §5-7
-  0,  // 7.16 Ch4 练习
-  4,  // 7.17 Ch5 §1-4
-  0,  // 7.18 轻休息
-  4,  // 7.19 Ch5 §5-8
-  0,  // 7.20 Ch5 练习
-  3,  // 7.21 Ch6 §1-3
-  0,  // 7.22 轻休息
-  4,  // 7.23 Ch6 §4-7
-  0,  // 7.24 Ch6 练习
-  4,  // 7.25 Ch7 §1-4
-  0,  // 7.26 Ch7 练习
-  3,  // 7.27 Ch8 §1-3
-  10  // 7.28 Ch9 §1-5 + Ch10 §1-5
+var TOTAL_COMM_SECTIONS = 55;
+var PREPLAN_COMPLETED_SECTIONS = 21;
+var DAY_SECTION_CREDITS = [2,0,4,1,3,0,0,0,3,0,0,0,4,0,2,2,3,10,0,0];
+
+var EXAM_DATE = new Date(2026, 11, 5);
+
+var PHASES = [
+  { name:"通信原理补完",          start:"2026-07-24", end:"2026-08-10" },
+  { name:"通信原理补漏",          start:"2026-08-11", end:"2026-08-12" },
+  { name:"出行休息",              start:"2026-08-02", end:"2026-08-04" },
+  { name:"光纤通信",              start:"2026-08-13", end:"2026-08-22" },
+  { name:"数据通信网络",          start:"2026-08-23", end:"2026-09-04" },
+  { name:"移动通信及业务系统",    start:"2026-09-05", end:"2026-09-15" },
+  { name:"公共能力+二轮冲刺",     start:"2026-09-16", end:"2026-12-04" }
+];
+
+var MOTTOS = [
+  "拖延最大的代价不是时间，是焦虑。打开就别关，先学 5 分钟再说。",
+  "每天 2 小时保底，听起来不多——但 134 天后你会感谢今天的自己。",
+  "启动困难？不用想学好，只想开始。翻开书就算赢。",
+  "你都花了精力做打卡页面，好意思不打钩吗？",
+  "国网考试一年一次。12 月 5 号不会等你准备好才来。",
+  "今天少学一小时 = 明天多焦虑一小时。等式成立。",
+  "别想有没有状态，先动起来，状态是做事的过程中产生的。",
+  "5 分钟法则：跟自己说只学 5 分钟，5 分钟后你大概率会继续。"
 ];
 
 // ===== STATE =====
-const STORAGE_KEY = 'comm_phase1_v2_state';
-const OPEN_KEY = 'comm_phase1_v2_open';
-const TOGGLED_KEY = 'comm_phase1_v2_toggled';
-const ROW_ID = 'phase1_v2';
-let state = defaultState();
-let syncTimer = null;
+var STORAGE_KEY = "comm_v4_state";
+var OPEN_KEY = "comm_v4_open";
+var TOGGLED_KEY = "comm_v4_toggled";
+var state = [];
+var showAllDays = false;
 
 function defaultState(){
-  return planData.map(d => ({
-    minTasks: d.min.map(() => false),
-    extraTasks: d.extra.map(() => false),
-    checkedIn: false
-  }));
+  return planData.map(function(d){
+    return {
+      minTasks: d.min.map(function(){ return false; }),
+      extraTasks: d.extra.map(function(){ return false; }),
+      checkedIn: false
+    };
+  });
 }
 
-// ===== LOCAL STORAGE =====
 function loadLocalState(){
-  try{
-    const raw = localStorage.getItem(STORAGE_KEY);
+  try {
+    var raw = localStorage.getItem(STORAGE_KEY);
     if(raw){
-      const saved = JSON.parse(raw);
+      var saved = JSON.parse(raw);
       if(saved.length === planData.length) return saved;
     }
-  }catch(e){}
+  } catch(e){}
   return null;
 }
-function saveLocalState(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+
+function saveLocalState(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
 
 function loadLocalOpen(){
-  try{
-    const raw = localStorage.getItem(OPEN_KEY);
-    if(raw) return new Set(JSON.parse(raw));
-  }catch(e){}
+  try {
+    var raw = localStorage.getItem(OPEN_KEY);
+    if(raw) {
+      var arr = JSON.parse(raw);
+      return new Set(arr);
+    }
+  } catch(e){}
   return new Set();
 }
+
 function saveLocalOpen(){
-  const openSet = new Set();
-  document.querySelectorAll('.day.open').forEach(el => {
-    const allDays = [...document.querySelectorAll('.day')];
-    openSet.add(allDays.indexOf(el));
+  var openSet = new Set();
+  var allDays = document.querySelectorAll(".day");
+  allDays.forEach(function(el, i){
+    if(el.classList.contains("open")) openSet.add(i);
   });
-  localStorage.setItem(OPEN_KEY, JSON.stringify([...openSet]));
-  localStorage.setItem(TOGGLED_KEY, '1');
-}
-
-// ===== SUPABASE SYNC =====
-function setSyncStatus(status){
-  const el = document.getElementById('syncIndicator');
-  el.className = 'sync-status ' + status;
-  if(status === 'synced') el.textContent = '☁️ 已同步';
-  else if(status === 'syncing') el.textContent = '🔄 同步中…';
-  else if(status === 'offline') el.textContent = '⚠️ 离线（数据已存本地）';
-}
-
-async function loadFromSupabase(){
-  if(!SUPABASE_CONFIGURED) return null;
-  try{
-    const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/study_state?id=eq.${ROW_ID}&select=state`,
-      { headers:{ 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` } }
-    );
-    if(!res.ok) return null;
-    const data = await res.json();
-    if(data.length > 0 && data[0].state){
-      const s = data[0].state;
-      if(s.length === planData.length) return s;
-    }
-    return null;
-  }catch(e){ return null; }
-}
-
-async function saveToSupabase(){
-  if(!SUPABASE_CONFIGURED) return;
-  setSyncStatus('syncing');
-  try{
-    const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/study_state`,
-      {
-        method: 'POST',
-        headers:{
-          'apikey': SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-          'Content-Type': 'application/json',
-          'Prefer': 'resolution=merge-duplicates'
-        },
-        body: JSON.stringify({ id: ROW_ID, state: state, updated_at: new Date().toISOString() })
-      }
-    );
-    if(res.ok){ setSyncStatus('synced'); }
-    else{ setSyncStatus('offline'); }
-  }catch(e){ setSyncStatus('offline'); }
-}
-
-function debouncedSync(){
-  if(syncTimer) clearTimeout(syncTimer);
-  syncTimer = setTimeout(() => saveToSupabase(), 800);
-}
-
-// ===== INIT =====
-async function initState(){
-  // 1. 先从本地秒加载，立即渲染
-  const local = loadLocalState();
-  if(local){ state = local; setSyncStatus('synced'); }
-  else { state = defaultState(); setSyncStatus('synced'); }
-  document.getElementById('daysContainer').style.display = 'block';
-  renderCalendars();
-  rebuildAll();
-
-  // 2. 后台静默同步 Supabase，不阻塞页面
-  if(SUPABASE_CONFIGURED){
-    const remote = await loadFromSupabase();
-    if(remote && JSON.stringify(remote) !== JSON.stringify(state)){
-      state = remote;
-      saveLocalState();
-      renderCalendars();
-      rebuildAll();
-    }
-    setSyncStatus('synced');
-  }
+  localStorage.setItem(OPEN_KEY, JSON.stringify(Array.from(openSet)));
+  localStorage.setItem(TOGGLED_KEY, "1");
 }
 
 // ===== CALENDAR =====
-const EXAM_DATE = new Date(2026, 11, 5); // Dec 5, 2026
-const PHASES = [
-  { name:'通信原理重排版',        start:'2026-07-14', end:'2026-07-28' },
-  { name:'通信原理机动补漏',      start:'2026-07-29', end:'2026-07-31' },
-  { name:'光纤通信',              start:'2026-08-01', end:'2026-08-10' },
-  { name:'数据通信网络',          start:'2026-08-11', end:'2026-08-22' },
-  { name:'移动通信及业务系统',    start:'2026-08-23', end:'2026-08-31' },
-  { name:'公共能力+总复盘',        start:'2026-09-01', end:'2026-12-04' }
-];
-const MOTTOS = [
-  '拖延最大的代价不是时间，是焦虑。打开就别关，先学 5 分钟再说。',
-  '每天 2 小时保底，听起来不多——但 157 天后你会感谢今天的自己。',
-  '启动困难？不用想"学好"，只想"开始"。翻开书就算赢。',
-  '你都花了精力做打卡页面，好意思不打钩吗？',
-  '国网考试一年一次。12 月 5 号不会等你准备好才来。',
-  '今天少学一小时 = 明天多焦虑一小时。等式成立。',
-  '别想"有没有状态"，先动起来，状态是做事的过程中产生的。',
-  '5 分钟法则：跟自己说只学 5 分钟，5 分钟后你大概率会继续。'
-];
-
 function renderCalendars(){
-  const container = document.getElementById('calendars');
-  container.innerHTML = '';
-  const today = new Date();
-  const curMonth = today.getMonth(); // 0=Jan
-  const curYear = today.getFullYear();
-  const todayKey = `${curYear}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
-  const examKey = '2026-12-05';
-  const weekDays = ['日','一','二','三','四','五','六'];
+  var container = document.getElementById("calendars");
+  container.innerHTML = "";
+  var today = new Date();
+  var curMonth = today.getMonth();
+  var curYear = today.getFullYear();
+  var todayKey = curYear + "-" + pad(today.getMonth()+1) + "-" + pad(today.getDate());
+  var examKey = "2026-12-05";
+  var weekDays = ["日","一","二","三","四","五","六"];
 
-  // 只显示当月 + 下月
-  const monthsToShow = [curMonth];
-  if(curMonth < 11) monthsToShow.push(curMonth + 1); // 12月考完不显示次年
+  var monthsToShow = [curMonth];
+  if(curMonth < 11) monthsToShow.push(curMonth + 1);
 
-  for(const m of monthsToShow){
-    const firstDay = new Date(curYear, m, 1);
-    const daysInMonth = new Date(curYear, m+1, 0).getDate();
-    const startDow = firstDay.getDay();
-    const monthNames = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+  monthsToShow.forEach(function(m){
+    var firstDay = new Date(curYear, m, 1);
+    var daysInMonth = new Date(curYear, m+1, 0).getDate();
+    var startDow = firstDay.getDay();
+    var monthNames = ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"];
 
-    let daysHTML = '';
-    for(let i = 0; i < startDow; i++){ daysHTML += '<span class="empty"></span>'; }
-    for(let d = 1; d <= daysInMonth; d++){
-      const dk = `${curYear}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-      let cls = '';
-      if(dk === todayKey) cls = 'today';
-      else if(dk === examKey) cls = 'exam-day';
-      else if(dk < todayKey) cls = 'past';
-      daysHTML += `<span class="${cls}">${d}</span>`;
+    var daysHTML = "";
+    for(var i = 0; i < startDow; i++){ daysHTML += '<span class="empty"></span>'; }
+    for(var d = 1; d <= daysInMonth; d++){
+      var dk = curYear + "-" + pad(m+1) + "-" + pad(d);
+      var cls = "";
+      if(dk === todayKey) cls = "today";
+      else if(dk === examKey) cls = "exam-day";
+      else if(dk < todayKey) cls = "past";
+      daysHTML += '<span class="' + cls + '">' + d + '</span>';
     }
-    container.innerHTML += `
-      <div class="month-card">
-        <div class="mname">${curYear}年 ${monthNames[m]}</div>
-        <div class="weekdays">${weekDays.map(w => `<span>${w}</span>`).join('')}</div>
-        <div class="days">${daysHTML}</div>
-      </div>`;
-  }
+    container.innerHTML += '<div class="month-card"><div class="mname">' + curYear + "年 " + monthNames[m] + '</div><div class="weekdays">' + weekDays.map(function(w){ return "<span>" + w + "</span>"; }).join("") + '</div><div class="days">' + daysHTML + '</div></div>';
+  });
 
   // Countdowns
-  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const examDiff = Math.ceil((EXAM_DATE - todayStart) / (1000*60*60*24));
-  document.getElementById('examCountdown').querySelector('.num').textContent = examDiff;
+  var todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  var examDiff = Math.ceil((EXAM_DATE - todayStart) / (1000*60*60*24));
+  document.getElementById("examCountdown").querySelector(".num").textContent = examDiff;
 
-  // Find current phase countdown
-  let phaseTarget = null;
-  for(const p of PHASES){
-    const pend = new Date(p.end);
+  var phaseTarget = null;
+  for(var i = 0; i < PHASES.length; i++){
+    var pend = new Date(PHASES[i].end);
     if(todayStart <= pend){
-      phaseTarget = { name: p.name, days: Math.ceil((pend - todayStart) / (1000*60*60*24)) };
+      phaseTarget = { name: PHASES[i].name, days: Math.ceil((pend - todayStart) / (1000*60*60*24)) };
       break;
     }
   }
   if(phaseTarget){
-    document.getElementById('phaseCountdown').querySelector('.num').textContent = phaseTarget.days;
-    document.getElementById('phaseCountdown').querySelector('.unit').textContent = `天 · ${phaseTarget.name}`;
-    document.getElementById('phaseCountdown').querySelector('.label').textContent = '当前阶段剩余';
+    document.getElementById("phaseCountdown").querySelector(".num").textContent = phaseTarget.days;
+    document.getElementById("phaseCountdown").querySelector(".unit").textContent = "天 · " + phaseTarget.name;
+    document.getElementById("phaseCountdown").querySelector(".label").textContent = "当前阶段剩余";
   }
-  // Random motto
-  document.getElementById('mottoText').textContent = MOTTOS[Math.floor(Math.random() * MOTTOS.length)];
+  document.getElementById("mottoText").textContent = MOTTOS[Math.floor(Math.random() * MOTTOS.length)];
 }
 
+function pad(n){ return n < 10 ? "0" + n : "" + n; }
+
 // ===== RENDER =====
-const container = document.getElementById('daysContainer');
-let showAllDays = false; // 默认聚焦模式
+var container = document.getElementById("daysContainer");
 
 function getTodayIndex(){
-  const now = new Date();
-  const m = now.getMonth()+1, d = now.getDate();
-  if(m === 7 && d >= 14 && d <= 28) return d - 14;
-  if(m > 7 || (m === 7 && d > 28)) return planData.length - 1; // 通信原理阶段已过，显示最后一天
-  return -1; // 新版计划还没开始
+  var now = new Date();
+  var m = now.getMonth() + 1;
+  var d = now.getDate();
+  if(m === 7 && d >= 24 && d <= 31) return d - 24;
+  if(m === 8 && d >= 1 && d <= 12) return d + 7;
+  if(m > 8 || (m === 8 && d > 12)) return planData.length - 1;
+  return -1;
 }
 
 function getPastIncomplete(){
-  const todayIdx = getTodayIndex();
-  const past = [];
-  for(let i = 0; i < todayIdx; i++){
-    const st = state[i];
+  var todayIdx = getTodayIndex();
+  var past = [];
+  for(var i = 0; i < todayIdx; i++){
+    var st = state[i];
     if(planData[i].isRest) continue;
-    const missing = [];
-    st.minTasks.forEach((done, ti) => { if(!done) missing.push({type:'min', text:planData[i].min[ti]}); });
+    var missing = [];
+    st.minTasks.forEach(function(done, ti){ if(!done) missing.push({type:"min", text:planData[i].min[ti]}); });
     if(missing.length > 0) past.push({dayIdx:i, day:planData[i], missing:missing});
   }
   return past;
@@ -483,178 +439,206 @@ function isToday(di){
 }
 
 function renderDay(day, di){
-  const st = state[di];
-  const dayDiv = document.createElement('div');
-  dayDiv.className = 'day' + (day.isRest ? ' rest' : '');
-  const savedOpen = loadLocalOpen();
-  const hasToggled = localStorage.getItem(TOGGLED_KEY);
-  // 聚焦模式：今天和未完成的天强制展开；全部模式：按记忆恢复
+  var st = state[di];
+  var dayDiv = document.createElement("div");
+  dayDiv.className = "day" + (day.isRest ? " rest" : "");
+
+  var savedOpen = loadLocalOpen();
+  var hasToggled = localStorage.getItem(TOGGLED_KEY);
+
   if(!showAllDays){
-    if(isToday(di) || getPastIncomplete().some(p => p.dayIdx === di)){
-      dayDiv.classList.add('open');
+    if(isToday(di) || getPastIncomplete().some(function(p){ return p.dayIdx === di; })){
+      dayDiv.classList.add("open");
     }
   } else {
     if(!hasToggled || savedOpen.has(di)){
-      dayDiv.classList.add('open');
+      dayDiv.classList.add("open");
     }
   }
 
-  const checkinHTML = day.isRest
+  var checkinHTML = day.isRest
     ? '<span class="checkin-badge done">休息</span>'
     : (st.checkedIn
-        ? '<span class="checkin-badge done">✓ 已打卡</span>'
+        ? '<span class="checkin-badge done">已打卡</span>'
         : '<span class="checkin-badge pending">待打卡</span>');
 
-  dayDiv.innerHTML = `
-    <div class="day-header">
-      <div class="left">
-        <span class="day-date">${day.date}</span>
-        <span class="day-weekday">${day.weekday}</span>
-        <span class="day-chapter">${day.chapter}</span>
-      </div>
-      <div class="right">${checkinHTML}<span class="day-arrow">▶</span></div>
-    </div>
-    <div class="day-body">
-      ${day.min.length ? `
-      <div class="task-group">
-        <div class="task-group-label"><span class="badge min">保底</span> 保底任务</div>
-        ${day.min.map((t, ti) => `
-          <div class="task">
-            <input type="checkbox" id="min_${di}_${ti}" ${st.minTasks[ti] ? 'checked' : ''}>
-            <label for="min_${di}_${ti}">${t}</label>
-          </div>`).join('')}
-      </div>` : ''}
-      ${day.extra.length ? `
-      <div class="task-group">
-        <div class="task-group-label"><span class="badge extra">有余</span> 学有余力</div>
-        ${day.extra.map((t, ti) => `
-          <div class="task">
-            <input type="checkbox" id="extra_${di}_${ti}" ${st.extraTasks[ti] ? 'checked' : ''}>
-            <label for="extra_${di}_${ti}">${t}</label>
-          </div>`).join('')}
-      </div>` : ''}
-      ${day.note ? `<div class="chapter-note">⚠️ ${day.note}</div>` : ''}
-      <div class="btn-row">
-        ${day.isRest ? '' : `<button class="btn btn-checkin${st.checkedIn ? ' done' : ''}" data-day="${di}" data-action="checkin">${st.checkedIn ? '✓ 已打卡' : '📋 打卡'}</button>`}
-        <button class="btn btn-reset" data-day="${di}" data-action="reset">重置当天</button>
-      </div>
-    </div>`;
+  var bodyHTML = "";
+  if(day.min.length){
+    bodyHTML += '<div class="task-group"><div class="task-group-label"><span class="badge min">保底</span> 保底任务</div>';
+    day.min.forEach(function(t, ti){
+      bodyHTML += '<div class="task"><input type="checkbox" id="min_' + di + '_' + ti + '"' + (st.minTasks[ti] ? ' checked' : '') + '><label for="min_' + di + '_' + ti + '">' + t + '</label></div>';
+    });
+    bodyHTML += '</div>';
+  }
+  if(day.extra.length){
+    bodyHTML += '<div class="task-group"><div class="task-group-label"><span class="badge extra">有余</span> 学有余力</div>';
+    day.extra.forEach(function(t, ti){
+      bodyHTML += '<div class="task"><input type="checkbox" id="extra_' + di + '_' + ti + '"' + (st.extraTasks[ti] ? ' checked' : '') + '><label for="extra_' + di + '_' + ti + '">' + t + '</label></div>';
+    });
+    bodyHTML += '</div>';
+  }
+  if(day.note){
+    bodyHTML += '<div class="chapter-note">' + day.note + '</div>';
+  }
+  bodyHTML += '<div class="btn-row">';
+  if(!day.isRest){
+    bodyHTML += '<button class="btn btn-checkin' + (st.checkedIn ? ' done' : '') + '" data-day="' + di + '" data-action="checkin">' + (st.checkedIn ? '已打卡' : '打卡') + '</button>';
+  }
+  bodyHTML += '<button class="btn btn-reset" data-day="' + di + '" data-action="reset">重置当天</button></div>';
+
+  dayDiv.innerHTML = '<div class="day-header"><div class="left"><span class="day-date">' + day.date + '</span><span class="day-weekday">' + day.weekday + '</span><span class="day-chapter">' + day.chapter + '</span></div><div class="right">' + checkinHTML + '<span class="day-arrow">▶</span></div></div><div class="day-body">' + bodyHTML + '</div>';
+
   container.appendChild(dayDiv);
 
-  dayDiv.querySelector('.day-header').addEventListener('click', () => {
-    dayDiv.classList.toggle('open');
+  dayDiv.querySelector(".day-header").addEventListener("click", function(){
+    dayDiv.classList.toggle("open");
     saveLocalOpen();
   });
 }
 
 function rebuildAll(){
-  container.innerHTML = '';
+  container.innerHTML = "";
   if(showAllDays){
-    // 展开全部模式
-    container.innerHTML = '<div style="text-align:right;margin-bottom:8px"><button class="btn btn-reset" id="btnFocusMode">📌 只看今日</button></div>';
-    planData.forEach((day, di) => renderDay(day, di));
+    container.innerHTML = '<div style="text-align:right;margin-bottom:8px"><button class="btn btn-reset" id="btnFocusMode">只看今日</button></div>';
+    planData.forEach(function(day, di){ renderDay(day, di); });
   } else {
-    // 聚焦模式：今日 + 历史未完成
-    const past = getPastIncomplete();
-    const todayIdx = getTodayIndex();
-    const pastSet = new Set(past.map(p => p.dayIdx));
+    var past = getPastIncomplete();
+    var todayIdx = getTodayIndex();
+    var pastSet = new Set();
+    past.forEach(function(p){ pastSet.add(p.dayIdx); });
 
-    let headerHTML = '<div style="text-align:right;margin-bottom:8px"><button class="btn btn-reset" id="btnShowAll">📋 展开全部 15 天</button></div>';
+    var headerHTML = '<div style="text-align:right;margin-bottom:8px"><button class="btn btn-reset" id="btnShowAll">展开全部 20 天</button></div>';
 
-    // 历史未完成警告
     if(past.length > 0){
-      headerHTML += '<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px;margin-bottom:12px;font-size:.82rem">';
-      headerHTML += '<strong style="color:var(--red)">⚠️ 你有 ' + past.length + ' 天的保底任务还没完成：</strong><br>';
-      past.forEach(p => {
-        headerHTML += '<span style="color:var(--muted)">' + p.day.date + ' ' + p.day.chapter + '</span>：';
-        headerHTML += p.missing.map(m => m.text).join('；') + '<br>';
+      headerHTML += '<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px;margin-bottom:12px;font-size:.82rem"><strong style="color:#dc2626">你有 ' + past.length + ' 天的保底任务还没完成：</strong><br>';
+      past.forEach(function(p){
+        headerHTML += '<span style="color:#888">' + p.day.date + ' ' + p.day.chapter + '</span>：';
+        headerHTML += p.missing.map(function(m){ return m.text; }).join("；") + '<br>';
       });
       headerHTML += '</div>';
     }
 
-    headerHTML += '<div style="font-size:.85rem;font-weight:700;color:var(--accent);margin-bottom:8px">📌 今日任务</div>';
+    headerHTML += '<div style="font-size:.85rem;font-weight:700;color:#2563eb;margin-bottom:8px">今日任务</div>';
     container.innerHTML = headerHTML;
 
-    // 渲染历史未完成的天 + 今天
-    past.forEach(p => renderDay(p.day, p.dayIdx));
+    past.forEach(function(p){ renderDay(p.day, p.dayIdx); });
     if(todayIdx >= 0 && todayIdx < planData.length && !pastSet.has(todayIdx)){
       renderDay(planData[todayIdx], todayIdx);
     }
 
-    // 如果今天不在阶段一范围内
     if(todayIdx < 0 || todayIdx >= planData.length){
-      container.innerHTML += '<div style="text-align:center;padding:20px;color:var(--muted);font-size:.85rem">通信原理新版计划（7.14-7.28）已结束或尚未开始</div>';
+      container.innerHTML += '<div style="text-align:center;padding:20px;color:#888;font-size:.85rem">通信原理重启补完计划（7.24-8.12）已结束或尚未开始</div>';
     }
   }
 
   updateProgress();
 
-  // 绑定切换按钮
-  document.getElementById('btnShowAll')?.addEventListener('click', () => { showAllDays = true; rebuildAll(); });
-  document.getElementById('btnFocusMode')?.addEventListener('click', () => { showAllDays = false; rebuildAll(); });
+  var btnShowAll = document.getElementById("btnShowAll");
+  if(btnShowAll) btnShowAll.addEventListener("click", function(){ showAllDays = true; rebuildAll(); });
+  var btnFocus = document.getElementById("btnFocusMode");
+  if(btnFocus) btnFocus.addEventListener("click", function(){ showAllDays = false; rebuildAll(); });
 }
 
 // ===== PROGRESS =====
 function updateProgress(){
-  let taskTotal = 0, taskDone = 0;
-  let sectionDone = PREPLAN_COMPLETED_SECTIONS;
-  let completedDays = 0;
-  planData.forEach((day, di) => {
-    const st = state[di];
-    day.min.forEach((_, ti) => { taskTotal++; if(st.minTasks[ti]) taskDone++; });
-    day.extra.forEach((_, ti) => { taskTotal++; if(st.extraTasks[ti]) taskDone++; });
-    const minDone = day.min.length === 0 || st.minTasks.every(t => t);
-    const extraDone = day.extra.length === 0 || st.extraTasks.every(t => t);
+  var taskTotal = 0, taskDone = 0;
+  var sectionDone = PREPLAN_COMPLETED_SECTIONS;
+  var completedDays = 0;
+  planData.forEach(function(day, di){
+    var st = state[di];
+    day.min.forEach(function(_, ti){ taskTotal++; if(st.minTasks[ti]) taskDone++; });
+    day.extra.forEach(function(_, ti){ taskTotal++; if(st.extraTasks[ti]) taskDone++; });
+    var minDone = day.min.length === 0 || st.minTasks.every(function(t){ return t; });
     if(minDone) sectionDone += DAY_SECTION_CREDITS[di] || 0;
+    var extraDone = day.extra.length === 0 || st.extraTasks.every(function(t){ return t; });
     if(minDone && extraDone && (day.isRest || st.checkedIn)) completedDays++;
   });
-  const pct = Math.round(sectionDone / TOTAL_COMM_SECTIONS * 100);
-  document.getElementById('overallPct').textContent = pct + '%';
-  document.getElementById('overallBar').style.width = pct + '%';
-  const checkedInCount = state.filter((s,i) => !planData[i].isRest && s.checkedIn).length;
-  const totalStudyDays = planData.filter(d => !d.isRest).length;
-  document.getElementById('progressDetail').innerHTML = `
-    <span>📚 全书小节 ${sectionDone}/${TOTAL_COMM_SECTIONS}</span>
-    <span>✅ 当前计划任务 ${taskDone}/${taskTotal}</span>
-    <span>📅 计划天数 ${completedDays}/${planData.length}</span>
-    <span>📋 打卡 ${checkedInCount}/${totalStudyDays}</span>`;
+  var pct = Math.round(sectionDone / TOTAL_COMM_SECTIONS * 100);
+  document.getElementById("overallPct").textContent = pct + "%";
+  document.getElementById("overallBar").style.width = pct + "%";
+  var checkedInCount = state.filter(function(s, i){ return !planData[i].isRest && s.checkedIn; }).length;
+  var totalStudyDays = planData.filter(function(d){ return !d.isRest; }).length;
+  document.getElementById("progressDetail").innerHTML = '<span>全书小节 ' + sectionDone + '/' + TOTAL_COMM_SECTIONS + '</span><span>当前任务 ' + taskDone + '/' + taskTotal + '</span><span>计划天数 ' + completedDays + '/' + planData.length + '</span><span>打卡 ' + checkedInCount + '/' + totalStudyDays + '</span>';
 }
 
 // ===== EVENT DELEGATION =====
-container.addEventListener('change', e => {
-  if(e.target.tagName !== 'INPUT') return;
-  const match = e.target.id.match(/^(min|extra)_(\d+)_(\d+)$/);
+container.addEventListener("change", function(e){
+  if(e.target.tagName !== "INPUT") return;
+  var match = e.target.id.match(/^(min|extra)_(\d+)_(\d+)$/);
   if(!match) return;
-  const [, type, di, ti] = match;
-  if(type === 'min') state[parseInt(di)].minTasks[parseInt(ti)] = e.target.checked;
-  else state[parseInt(di)].extraTasks[parseInt(ti)] = e.target.checked;
+  var type = match[1], di = parseInt(match[2]), ti = parseInt(match[3]);
+  if(type === "min") state[di].minTasks[ti] = e.target.checked;
+  else state[di].extraTasks[ti] = e.target.checked;
   saveLocalState();
-  debouncedSync();
   updateProgress();
 });
 
-container.addEventListener('click', e => {
-  const btn = e.target.closest('button');
+container.addEventListener("click", function(e){
+  var btn = e.target.closest("button");
   if(!btn) return;
-  const di = parseInt(btn.dataset.day);
-  const action = btn.dataset.action;
-  if(action === 'checkin'){
+  var di = parseInt(btn.dataset.day);
+  var action = btn.dataset.action;
+  if(action === "checkin"){
     state[di].checkedIn = !state[di].checkedIn;
     saveLocalState();
-    debouncedSync();
-    saveLocalOpen(); // 记住当前哪些卡片展开，重建后恢复
+    saveLocalOpen();
     rebuildAll();
-  } else if(action === 'reset'){
-    state[di] = { minTasks: planData[di].min.map(() => false), extraTasks: planData[di].extra.map(() => false), checkedIn: false };
+  } else if(action === "reset"){
+    state[di] = { minTasks: planData[di].min.map(function(){ return false; }), extraTasks: planData[di].extra.map(function(){ return false; }), checkedIn: false };
     saveLocalState();
-    debouncedSync();
     saveLocalOpen();
     rebuildAll();
   }
 });
 
-// ===== START =====
-initState();
+// ===== EXPORT/IMPORT =====
+function exportData(){
+  var json = JSON.stringify(state, null, 2);
+  navigator.clipboard.writeText(json).then(function(){
+    var el = document.getElementById("copiedHint");
+    el.style.display = "inline";
+    setTimeout(function(){ el.style.display = "none"; }, 2000);
+  }).catch(function(){
+    // Fallback: show in a textarea for manual copy
+    prompt("请手动复制以下内容，发送到另一台设备：", json);
+  });
+}
+
+function importData(){
+  var txt = prompt("请粘贴之前导出的数据：");
+  if(!txt) return;
+  try {
+    var imported = JSON.parse(txt);
+    if(imported.length !== planData.length){
+      alert("数据格式不匹配（期望 " + planData.length + " 天，收到 " + imported.length + " 天）");
+      return;
+    }
+    state = imported;
+    saveLocalState();
+    rebuildAll();
+    alert("数据已导入！");
+  } catch(e){
+    alert("导入失败：数据格式不正确");
+  }
+}
+
+window.exportData = exportData;
+window.importData = importData;
+
+// ===== INIT =====
+function init(){
+  var local = loadLocalState();
+  if(local){ state = local; }
+  else { state = defaultState(); }
+
+  renderCalendars();
+  rebuildAll();
+}
+
+init();
+
+})();
 </script>
 </body>
 </html>
+
